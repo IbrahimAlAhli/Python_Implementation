@@ -519,10 +519,7 @@ class SmartCampusApp:
             messagebox.showerror("Error", "User not found or already Premium/Admin.")
 
 
-# =========================
 # Run Program
-# =========================
-
 if __name__ == "__main__":
     root = tk.Tk()
     app = SmartCampusApp(root)
