@@ -1,0 +1,529 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+import pickle
+import os
+from datetime import datetime
+
+
+# Custom Exceptions
+class BookingError(Exception):
+    pass
+
+
+class AccessDeniedError(BookingError):
+    pass
+
+
+class TimeSlotUnavailableError(BookingError):
+    pass
+
+
+class CapacityError(BookingError):
+    pass
+
+
+# Classes
+
+class User:
+    def __init__(self, user_id, name, password, access_type="Standard"):
+        self.user_id = user_id
+        self.name = name
+        self.password = password
+        self.access_type = access_type
+        self.bookings = []
+
+    def update_profile(self, new_name):
+        self.name = new_name
+
+    def view_booking_history(self):
+        return self.bookings
+
+
+class StandardUser(User):
+    def __init__(self, user_id, name, password):
+        super().__init__(user_id, name, password, "Standard")
+
+
+class PremiumUser(User):
+    def __init__(self, user_id, name, password):
+        super().__init__(user_id, name, password, "Premium")
+
+
+class Admin(User):
+    def __init__(self, user_id, name, password):
+        super().__init__(user_id, name, password, "Admin")
+
+
+class Facility:
+    def __init__(self, facility_id, name, facility_type, location, capacity, fee_per_hour, slots):
+        self.facility_id = facility_id
+        self.name = name
+        self.facility_type = facility_type
+        self.location = location
+        self.capacity = capacity
+        self.fee_per_hour = fee_per_hour
+        self.slots = slots
+        self.status = "Available"
+
+    def display_details(self):
+        return f"{self.name} | {self.facility_type} | Capacity: {self.capacity} | Fee: {self.fee_per_hour} AED/hour"
+
+    def update_availability(self, status):
+        self.status = status
+
+
+class StudyRoom(Facility):
+    pass
+
+
+class SportsCourt(Facility):
+    pass
+
+
+class EventHall(Facility):
+    pass
+
+
+class Booking:
+    def __init__(self, booking_id, user_id, facility_id, facility_name, slot, duration, total_cost):
+        self.booking_id = booking_id
+        self.user_id = user_id
+        self.facility_id = facility_id
+        self.facility_name = facility_name
+        self.slot = slot
+        self.duration = duration
+        self.total_cost = total_cost
+        self.status = "Confirmed"
+        self.date = datetime.now().strftime("%Y-%m-%d")
+
+    def cancel_booking(self):
+        self.status = "Cancelled"
+
+
+# Pickle Data Storage
+USERS_FILE = "users.pkl"
+FACILITIES_FILE = "facilities.pkl"
+BOOKINGS_FILE = "bookings.pkl"
+
+
+def save_data(filename, data):
+    with open(filename, "wb") as file:
+        pickle.dump(data, file)
+
+
+def load_data(filename, default):
+    if os.path.exists(filename):
+        with open(filename, "rb") as file:
+            return pickle.load(file)
+    return default
+
+
+def create_default_facilities():
+    return {
+        "F1": StudyRoom("F1", "Room A", "Study Room", "Building C, Floor 2", 6, 0,
+                        ["09:00-11:00", "11:00-13:00", "14:00-16:00"]),
+        "F2": StudyRoom("F2", "Room B", "Study Room", "Library Wing", 4, 0,
+                        ["10:00-12:00", "13:00-15:00"]),
+        "F3": SportsCourt("F3", "Basketball Court", "Sports Court", "Outdoor Area", 10, 20,
+                          ["08:00-10:00", "16:00-18:00"]),
+        "F4": SportsCourt("F4", "Tennis Court", "Sports Court", "Outdoor Area", 4, 15,
+                          ["09:00-11:00", "15:00-17:00"]),
+        "F5": EventHall("F5", "Hall 1", "Event Hall", "Indoor", 50, 100,
+                        ["09:00-12:00", "13:00-16:00"]),
+        "F6": EventHall("F6", "Hall 2", "Event Hall", "Indoor", 100, 150,
+                        ["10:00-13:00", "14:00-17:00"])
+    }
+
+
+users = load_data(USERS_FILE, {})
+facilities = load_data(FACILITIES_FILE, create_default_facilities())
+bookings = load_data(BOOKINGS_FILE, {})
+
+if "admin" not in users:
+    users["admin"] = Admin("admin", "System Admin", "admin123")
+    save_data(USERS_FILE, users)
+
+
+# GUI Application
+class SmartCampusApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Smart Campus Facility Booking System")
+        self.root.geometry("750x550")
+        self.current_user = None
+        self.login_window()
+
+    def clear_window(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+    def login_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Smart Campus Facility Booking System",
+                 font=("Arial", 18, "bold")).pack(pady=20)
+
+        tk.Label(self.root, text="User ID").pack()
+        self.user_id_entry = tk.Entry(self.root)
+        self.user_id_entry.pack()
+
+        tk.Label(self.root, text="Password").pack()
+        self.password_entry = tk.Entry(self.root, show="*")
+        self.password_entry.pack()
+
+        tk.Button(self.root, text="Login", width=20, command=self.login).pack(pady=10)
+        tk.Button(self.root, text="Create Account", width=20, command=self.signup_window).pack()
+
+    def signup_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Create Account", font=("Arial", 18, "bold")).pack(pady=20)
+
+        tk.Label(self.root, text="User ID").pack()
+        self.new_id = tk.Entry(self.root)
+        self.new_id.pack()
+
+        tk.Label(self.root, text="Name").pack()
+        self.new_name = tk.Entry(self.root)
+        self.new_name.pack()
+
+        tk.Label(self.root, text="Password").pack()
+        self.new_password = tk.Entry(self.root, show="*")
+        self.new_password.pack()
+
+        tk.Label(self.root, text="Access Type").pack()
+        self.access_combo = ttk.Combobox(self.root, values=["Standard", "Premium"])
+        self.access_combo.pack()
+        self.access_combo.set("Standard")
+
+        tk.Button(self.root, text="Create", command=self.create_account).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.login_window).pack()
+
+    def create_account(self):
+        user_id = self.new_id.get()
+        name = self.new_name.get()
+        password = self.new_password.get()
+        access_type = self.access_combo.get()
+
+        try:
+            if user_id == "" or name == "" or password == "":
+                raise ValueError("All fields are required.")
+
+            if user_id in users:
+                raise ValueError("User ID already exists.")
+
+            if access_type == "Standard":
+                users[user_id] = StandardUser(user_id, name, password)
+            else:
+                users[user_id] = PremiumUser(user_id, name, password)
+
+            save_data(USERS_FILE, users)
+            messagebox.showinfo("Success", "Account created successfully.")
+            self.login_window()
+
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+
+    def login(self):
+        user_id = self.user_id_entry.get()
+        password = self.password_entry.get()
+
+        if user_id in users and users[user_id].password == password:
+            self.current_user = users[user_id]
+            if self.current_user.access_type == "Admin":
+                self.admin_dashboard()
+            else:
+                self.user_dashboard()
+        else:
+            messagebox.showerror("Login Failed", "Invalid user ID or password.")
+
+    def user_dashboard(self):
+        self.clear_window()
+
+        tk.Label(self.root, text=f"Welcome {self.current_user.name}",
+                 font=("Arial", 16, "bold")).pack(pady=10)
+
+        tk.Label(self.root, text=f"Access Type: {self.current_user.access_type}",
+                 font=("Arial", 12)).pack()
+
+        tk.Button(self.root, text="View Facilities and Book", width=30,
+                  command=self.booking_window).pack(pady=10)
+
+        tk.Button(self.root, text="View My Bookings", width=30,
+                  command=self.my_bookings_window).pack(pady=10)
+
+        tk.Button(self.root, text="Update Profile", width=30,
+                  command=self.update_profile_window).pack(pady=10)
+
+        tk.Button(self.root, text="Logout", width=30,
+                  command=self.login_window).pack(pady=10)
+
+    def booking_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Facility Booking", font=("Arial", 18, "bold")).pack(pady=10)
+
+        self.facility_combo = ttk.Combobox(self.root, width=70)
+        facility_values = [f"{fid} - {facility.display_details()}" for fid, facility in facilities.items()]
+        self.facility_combo["values"] = facility_values
+        self.facility_combo.pack(pady=5)
+
+        tk.Label(self.root, text="Select Time Slot").pack()
+        self.slot_combo = ttk.Combobox(self.root, width=40)
+        self.slot_combo.pack(pady=5)
+
+        tk.Button(self.root, text="Load Slots", command=self.load_slots).pack(pady=5)
+
+        tk.Label(self.root, text="Duration Hours").pack()
+        self.duration_entry = tk.Entry(self.root)
+        self.duration_entry.pack()
+
+        tk.Button(self.root, text="Calculate Cost", command=self.calculate_cost).pack(pady=5)
+        self.cost_label = tk.Label(self.root, text="Total Cost: 0 AED", font=("Arial", 12, "bold"))
+        self.cost_label.pack()
+
+        tk.Button(self.root, text="Confirm Booking", command=self.confirm_booking).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.user_dashboard).pack()
+
+    def load_slots(self):
+        try:
+            selected = self.facility_combo.get()
+            facility_id = selected.split(" - ")[0]
+            facility = facilities[facility_id]
+            self.slot_combo["values"] = facility.slots
+        except:
+            messagebox.showerror("Error", "Please select a facility first.")
+
+    def calculate_cost(self):
+        try:
+            selected = self.facility_combo.get()
+            facility_id = selected.split(" - ")[0]
+            facility = facilities[facility_id]
+            duration = int(self.duration_entry.get())
+
+            if duration <= 0:
+                raise ValueError("Duration must be greater than zero.")
+
+            total = facility.fee_per_hour * duration
+            self.cost_label.config(text=f"Total Cost: {total} AED")
+
+        except ValueError as e:
+            messagebox.showerror("Input Error", str(e))
+        except KeyError:
+            messagebox.showerror("Error", "Please select a valid facility.")
+
+    def confirm_booking(self):
+        try:
+            selected = self.facility_combo.get()
+            facility_id = selected.split(" - ")[0]
+            facility = facilities[facility_id]
+            slot = self.slot_combo.get()
+            duration = int(self.duration_entry.get())
+
+            if facility.status != "Available":
+                raise TimeSlotUnavailableError("This facility is not available.")
+
+            if slot not in facility.slots:
+                raise TimeSlotUnavailableError("Selected time slot is not available.")
+
+            if facility.capacity <= 0:
+                raise CapacityError("Facility capacity is full.")
+
+            if self.current_user.access_type == "Standard":
+                previous_types = set()
+                for booking_id in self.current_user.bookings:
+                    old_booking = bookings[booking_id]
+                    old_facility = facilities[old_booking.facility_id]
+                    previous_types.add(old_facility.facility_type)
+
+                if len(previous_types) > 0 and facility.facility_type not in previous_types:
+                    raise AccessDeniedError("Standard users can book only one facility type.")
+
+            total_cost = facility.fee_per_hour * duration
+            booking_id = "B" + str(len(bookings) + 1)
+
+            new_booking = Booking(
+                booking_id,
+                self.current_user.user_id,
+                facility_id,
+                facility.name,
+                slot,
+                duration,
+                total_cost
+            )
+
+            bookings[booking_id] = new_booking
+            self.current_user.bookings.append(booking_id)
+
+            facility.slots.remove(slot)
+
+            save_data(USERS_FILE, users)
+            save_data(FACILITIES_FILE, facilities)
+            save_data(BOOKINGS_FILE, bookings)
+
+            messagebox.showinfo("Success", f"Booking confirmed.\nTotal Cost: {total_cost} AED")
+
+        except BookingError as e:
+            messagebox.showerror("Booking Error", str(e))
+        except ValueError:
+            messagebox.showerror("Input Error", "Duration must be a valid number.")
+        except KeyError:
+            messagebox.showerror("Error", "Please select a valid facility.")
+
+    def my_bookings_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="My Bookings", font=("Arial", 18, "bold")).pack(pady=10)
+
+        self.booking_list = tk.Listbox(self.root, width=100, height=15)
+        self.booking_list.pack()
+
+        for booking_id in self.current_user.bookings:
+            booking = bookings[booking_id]
+            self.booking_list.insert(
+                tk.END,
+                f"{booking.booking_id} | {booking.facility_name} | {booking.slot} | {booking.total_cost} AED | {booking.status}"
+            )
+
+        tk.Button(self.root, text="Cancel Selected Booking", command=self.cancel_booking).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.user_dashboard).pack()
+
+    def cancel_booking(self):
+        try:
+            selected_index = self.booking_list.curselection()[0]
+            booking_id = self.current_user.bookings[selected_index]
+            booking = bookings[booking_id]
+            booking.cancel_booking()
+
+            facility = facilities[booking.facility_id]
+            if booking.slot not in facility.slots:
+                facility.slots.append(booking.slot)
+
+            save_data(BOOKINGS_FILE, bookings)
+            save_data(FACILITIES_FILE, facilities)
+
+            messagebox.showinfo("Success", "Booking cancelled.")
+            self.my_bookings_window()
+
+        except IndexError:
+            messagebox.showerror("Error", "Please select a booking.")
+
+    def update_profile_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Update Profile", font=("Arial", 18, "bold")).pack(pady=10)
+
+        tk.Label(self.root, text="New Name").pack()
+        self.update_name_entry = tk.Entry(self.root)
+        self.update_name_entry.insert(0, self.current_user.name)
+        self.update_name_entry.pack()
+
+        tk.Button(self.root, text="Update", command=self.update_profile).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.user_dashboard).pack()
+
+    def update_profile(self):
+        new_name = self.update_name_entry.get()
+
+        if new_name == "":
+            messagebox.showerror("Error", "Name cannot be empty.")
+        else:
+            self.current_user.update_profile(new_name)
+            save_data(USERS_FILE, users)
+            messagebox.showinfo("Success", "Profile updated.")
+            self.user_dashboard()
+
+    def admin_dashboard(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Admin Dashboard", font=("Arial", 18, "bold")).pack(pady=10)
+
+        tk.Button(self.root, text="View Daily Bookings", width=35,
+                  command=self.view_daily_bookings).pack(pady=5)
+
+        tk.Button(self.root, text="Modify Facility Availability", width=35,
+                  command=self.modify_facility_window).pack(pady=5)
+
+        tk.Button(self.root, text="Upgrade User Access", width=35,
+                  command=self.upgrade_user_window).pack(pady=5)
+
+        tk.Button(self.root, text="Logout", width=35,
+                  command=self.login_window).pack(pady=5)
+
+    def view_daily_bookings(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Daily Booking Activity", font=("Arial", 18, "bold")).pack(pady=10)
+
+        listbox = tk.Listbox(self.root, width=100, height=18)
+        listbox.pack()
+
+        for booking in bookings.values():
+            listbox.insert(
+                tk.END,
+                f"{booking.date} | User: {booking.user_id} | Facility: {booking.facility_name} | Cost: {booking.total_cost} AED | {booking.status}"
+            )
+
+        tk.Button(self.root, text="Back", command=self.admin_dashboard).pack(pady=10)
+
+    def modify_facility_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Modify Facility Availability", font=("Arial", 18, "bold")).pack(pady=10)
+
+        self.admin_facility_combo = ttk.Combobox(self.root, width=70)
+        self.admin_facility_combo["values"] = [f"{fid} - {f.name} - {f.status}" for fid, f in facilities.items()]
+        self.admin_facility_combo.pack(pady=5)
+
+        self.status_combo = ttk.Combobox(self.root, values=["Available", "Booked", "Maintenance", "Closed"])
+        self.status_combo.pack(pady=5)
+        self.status_combo.set("Available")
+
+        tk.Button(self.root, text="Update Status", command=self.update_facility_status).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.admin_dashboard).pack()
+
+    def update_facility_status(self):
+        try:
+            selected = self.admin_facility_combo.get()
+            facility_id = selected.split(" - ")[0]
+            facilities[facility_id].update_availability(self.status_combo.get())
+            save_data(FACILITIES_FILE, facilities)
+            messagebox.showinfo("Success", "Facility status updated.")
+            self.admin_dashboard()
+        except KeyError:
+            messagebox.showerror("Error", "Please select a valid facility.")
+
+    def upgrade_user_window(self):
+        self.clear_window()
+
+        tk.Label(self.root, text="Upgrade User Access", font=("Arial", 18, "bold")).pack(pady=10)
+
+        tk.Label(self.root, text="Enter User ID").pack()
+        self.upgrade_entry = tk.Entry(self.root)
+        self.upgrade_entry.pack()
+
+        tk.Button(self.root, text="Upgrade to Premium", command=self.upgrade_user).pack(pady=10)
+        tk.Button(self.root, text="Back", command=self.admin_dashboard).pack()
+
+    def upgrade_user(self):
+        user_id = self.upgrade_entry.get()
+
+        if user_id in users and users[user_id].access_type == "Standard":
+            old_user = users[user_id]
+            new_user = PremiumUser(old_user.user_id, old_user.name, old_user.password)
+            new_user.bookings = old_user.bookings
+            users[user_id] = new_user
+            save_data(USERS_FILE, users)
+            messagebox.showinfo("Success", "User upgraded to Premium.")
+            self.admin_dashboard()
+        else:
+            messagebox.showerror("Error", "User not found or already Premium/Admin.")
+
+
+# =========================
+# Run Program
+# =========================
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = SmartCampusApp(root)
+    root.mainloop()
